@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #
@@ -45,6 +45,7 @@ class A1AMPCfg( LeggedRobotCfg ):
         reference_state_initialization_prob = 0.85
         amp_motion_files = MOTION_FILES
         ee_names = ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
+        get_commands_from_joystick = False
 
     class init_state( LeggedRobotCfg.init_state ):
         pos = [0.0, 0.0, 0.42] # x,y,z [m]
@@ -60,7 +61,7 @@ class A1AMPCfg( LeggedRobotCfg ):
             'leg2_RL_a_hip_joint': -0.15,   # [rad]
             'leg2_RL_c_thigh_joint': 0.7,   # [rad]
             'leg2_RL_d_calf_joint': -1.5,    # [rad]
-            
+
             'leg3_RR_a_hip_joint': 0.15,   # [rad]
             'leg3_RR_c_thigh_joint': 0.7,   # [rad]
             'leg3_RR_d_calf_joint': -1.5,    # [rad]
@@ -88,7 +89,7 @@ class A1AMPCfg( LeggedRobotCfg ):
             "base", "FL_calf", "FR_calf", "RL_calf", "RR_calf",
             "FL_thigh", "FR_thigh", "RL_thigh", "RR_thigh"]
         self_collisions = 0 # 1 to disable, 0 to enable...bitwise filter
-  
+
     class domain_rand:
         randomize_friction = True
         friction_range = [0.25, 1.75]
@@ -125,10 +126,10 @@ class A1AMPCfg( LeggedRobotCfg ):
             torques = 0.0
             dof_vel = 0.0
             dof_acc = 0.0
-            base_height = 0.0 
+            base_height = 0.0
             feet_air_time =  0.0
             collision = 0.0
-            feet_stumble = 0.0 
+            feet_stumble = 0.0
             action_rate = 0.0
             stand_still = 0.0
             dof_pos_limits = 0.0
@@ -168,4 +169,4 @@ class A1AMPCfgPPO( LeggedRobotCfgPPO ):
 
         min_normalized_std = [0.01, 0.01, 0.01] * 4
 
-  
+
