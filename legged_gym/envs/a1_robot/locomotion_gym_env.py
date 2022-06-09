@@ -24,8 +24,8 @@ import pybullet_utils.bullet_client as bullet_client
 import pybullet_data as pd
 
 from legged_gym.envs.a1_robot import robot_config
-from legged_gym.envs.a1_robot import sensor
 from legged_gym.envs.a1_robot import space_utils
+from legged_gym.envs.a1_robot.sensors import sensor
 
 _ACTION_EPS = 0.01
 _NUM_SIMULATION_ITERATION_STEPS = 300

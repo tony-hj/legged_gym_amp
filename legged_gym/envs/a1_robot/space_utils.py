@@ -11,7 +11,7 @@ from gym import spaces
 import numpy as np
 import typing
 
-from legged_gym.envs.a1_robot  import sensor
+from legged_gym.envs.a1_robot.sensors  import sensor
 
 
 class UnsupportedConversionError(Exception):

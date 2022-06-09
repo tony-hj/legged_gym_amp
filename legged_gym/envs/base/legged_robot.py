@@ -82,7 +82,7 @@ class LeggedRobot(BaseTask):
                             LEGGED_GYM_ROOT_DIR=LEGGED_GYM_ROOT_DIR)).read(),
                                 ee_name).to(device=sim_device))
 
-        self._get_commands_from_joystick = True
+        self._get_commands_from_joystick = self.cfg.env.get_commands_from_joystick
         if self._get_commands_from_joystick:
           pygame.init()
           self._p1 = pygame.joystick.Joystick(0)

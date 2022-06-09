@@ -54,7 +54,10 @@ MOTOR_NAMES = [
 "leg3_RR_c_thigh_joint",
 "leg3_RR_d_calf_joint",
 ]
+MOTOR_ANGLE_LOWER_BOUNDS = [-0.802851455917, -1.0471975512, -2.69653369433] * NUM_LEGS
+MOTOR_ANGLE_UPPER_BOUNDS = [0.802851455917, 4.18879020479, -0.916297857297] * NUM_LEGS
 FOOT_NAMES = ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
+
 JOINT_DIRECTIONS = np.ones(12)
 HIP_JOINT_OFFSET = 0.0
 UPPER_LEG_JOINT_OFFSET = 0.0
@@ -65,7 +68,6 @@ JOINT_OFFSETS = np.array(
 PI = math.pi
 
 MAX_MOTOR_ANGLE_CHANGE_PER_STEP = 0.2
-# TODO: Find appropriate limits.
 MAX_JOINT_VELOCITY = np.inf  # rad/s (was 11)
 MAX_TORQUE = 35.5  # N-m
 
@@ -81,15 +83,21 @@ HIP_OFFSETS = np.array([[0.183, -0.047, 0.], [0.183, 0.047, 0.],
                         [-0.183, -0.047, 0.], [-0.183, 0.047, 0.]
                         ]) + COM_OFFSET
 
-ABDUCTION_P_GAIN = 100.0
+ABDUCTION_P_GAIN = 80.0
 ABDUCTION_D_GAIN = 1.
-HIP_P_GAIN = 100.0
-HIP_D_GAIN = 2.0
-KNEE_P_GAIN = 100.0
-KNEE_D_GAIN = 2.0
+HIP_P_GAIN = 80.0
+HIP_D_GAIN = 1.0
+KNEE_P_GAIN = 80.0
+KNEE_D_GAIN = 1.0
+
+MOTOR_KPS = [ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN, ABDUCTION_P_GAIN,
+             HIP_P_GAIN, KNEE_P_GAIN, ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN,
+             ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN]
+MOTOR_KDS = [ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN, ABDUCTION_D_GAIN,
+             HIP_D_GAIN, KNEE_D_GAIN, ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN,
+             ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN]
 
 # Bases on the readings from Laikago's default pose.
-INIT_MOTOR_ANGLES = np.array([0, 0.9, -1.8] * NUM_LEGS)
 INIT_MOTOR_ANGLES = np.array([
   -0.15, 0.55, -1.5,
   0.15, 0.55, -1.5,
@@ -213,44 +221,12 @@ class A1(minitaur.Minitaur):
   MPC_BODY_INERTIA = np.array((0.017, 0, 0, 0, 0.057, 0, 0, 0, 0.064)) * 4.
   MPC_BODY_HEIGHT = 0.24
   MPC_VELOCITY_MULTIPLIER = 0.5
+
   ACTION_CONFIG = [
-      locomotion_gym_config.ScalarField(name="FR_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="FR_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="FR_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="FL_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="FL_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="FL_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="RR_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="RR_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="RR_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="RL_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="RL_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="RL_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-  ]
+      locomotion_gym_config.ScalarField(name=n, upper_bound=u, lower_bound=l)
+      for n, u, l in zip(
+          MOTOR_NAMES, MOTOR_ANGLE_UPPER_BOUNDS, MOTOR_ANGLE_LOWER_BOUNDS)]
+
   INIT_RACK_POSITION = [0, 0, 1]
   INIT_POSITION = [0, 0, 0.25870023]
   INIT_ORIENTATION = (0, 0, 0, 1)
@@ -298,18 +274,6 @@ class A1(minitaur.Minitaur):
     self._allow_knee_contact = allow_knee_contact
     self._enable_clip_motor_commands = enable_clip_motor_commands
 
-    motor_kp = [
-        ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN, ABDUCTION_P_GAIN,
-        HIP_P_GAIN, KNEE_P_GAIN, ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN,
-        ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN
-    ]
-    motor_kd = [
-        ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN, ABDUCTION_D_GAIN,
-        HIP_D_GAIN, KNEE_D_GAIN, ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN,
-        ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN
-    ]
-
-
     self.chain_ee = []
     for ee_name in FOOT_NAMES:
       self.chain_ee.append(
@@ -350,8 +314,8 @@ class A1(minitaur.Minitaur):
         motor_model_class=laikago_motor.LaikagoMotorModel,
         motor_torque_limits=motor_torque_limits,
         sensors=sensors,
-        motor_kp=motor_kp,
-        motor_kd=motor_kd,
+        motor_kp=MOTOR_KPS,
+        motor_kd=MOTOR_KDS,
         control_latency=control_latency,
         observation_noise_stdev=observation_noise_stdev,
         on_rack=on_rack,

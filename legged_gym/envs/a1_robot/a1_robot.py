@@ -29,55 +29,17 @@ import multiprocessing
 import numpy as np
 import time
 
-from legged_gym.envs.a1_robot import laikago_pose_utils
 from legged_gym.envs.a1_robot import a1
 from legged_gym.envs.a1_robot import minitaur
 from legged_gym.envs.a1_robot import robot_config
 from legged_gym.envs.a1_robot import locomotion_gym_config
-# from robot_interface import RobotInterface  # pytype: disable=import-error
 
-NUM_MOTORS = 12
-NUM_LEGS = 4
-MOTOR_NAMES = [
-    "FR_hip_joint",
-    "FR_upper_joint",
-    "FR_lower_joint",
-    "FL_hip_joint",
-    "FL_upper_joint",
-    "FL_lower_joint",
-    "RR_hip_joint",
-    "RR_upper_joint",
-    "RR_lower_joint",
-    "RL_hip_joint",
-    "RL_upper_joint",
-    "RL_lower_joint",
-]
-INIT_RACK_POSITION = [0, 0, 1]
-INIT_POSITION = [0, 0, 0.48]
-JOINT_DIRECTIONS = np.ones(12)
-HIP_JOINT_OFFSET = 0.0
-UPPER_LEG_JOINT_OFFSET = 0.0
-KNEE_JOINT_OFFSET = 0.0
-DOFS_PER_LEG = 3
-JOINT_OFFSETS = np.array(
-    [HIP_JOINT_OFFSET, UPPER_LEG_JOINT_OFFSET, KNEE_JOINT_OFFSET] * 4)
-PI = math.pi
+try:
+  from robot_interface import RobotInterface  # pytype: disable=import-error                  
+except ImportError:
+  print("Could not import robot_interface for A1. Please "
+        "follow the Unitree SDK install instructions to run on hardware.")
 
-_DEFAULT_HIP_POSITIONS = (
-    (0.17, -0.135, 0),
-    (0.17, 0.13, 0),
-    (-0.195, -0.135, 0),
-    (-0.195, 0.13, 0),
-)
-
-ABDUCTION_P_GAIN = 100.0
-ABDUCTION_D_GAIN = 1.0
-HIP_P_GAIN = 100.0
-HIP_D_GAIN = 2.0
-KNEE_P_GAIN = 100.0
-KNEE_D_GAIN = 2.0
-MOTOR_KPS = [ABDUCTION_P_GAIN, HIP_P_GAIN, KNEE_P_GAIN] * 4
-MOTOR_KDS = [ABDUCTION_D_GAIN, HIP_D_GAIN, KNEE_D_GAIN] * 4
 # If any motor is above this temperature (Celsius), a warning will be printed.
 # At 60C, Unitree will shut down a motor until it cools off.
 MOTOR_WARN_TEMP_C = 50.0
@@ -85,71 +47,9 @@ MOTOR_WARN_TEMP_C = 50.0
 COMMAND_CHANNEL_NAME = 'LCM_Low_Cmd'
 STATE_CHANNEL_NAME = 'LCM_Low_State'
 
-# Bases on the readings from Laikago's default pose.
-INIT_MOTOR_ANGLES = np.array([
-    laikago_pose_utils.LAIKAGO_DEFAULT_ABDUCTION_ANGLE,
-    laikago_pose_utils.LAIKAGO_DEFAULT_HIP_ANGLE,
-    laikago_pose_utils.LAIKAGO_DEFAULT_KNEE_ANGLE
-] * NUM_LEGS)
-
-HIP_NAME_PATTERN = re.compile(r"\w+_hip_\w+")
-UPPER_NAME_PATTERN = re.compile(r"\w+_upper_\w+")
-LOWER_NAME_PATTERN = re.compile(r"\w+_lower_\w+")
-TOE_NAME_PATTERN = re.compile(r"\w+_toe\d*")
-IMU_NAME_PATTERN = re.compile(r"imu\d*")
-
-URDF_FILENAME = "a1/a1.urdf"
-
-_BODY_B_FIELD_NUMBER = 2
-_LINK_A_FIELD_NUMBER = 3
-
 
 class A1Robot(a1.A1):
   """Interface for real A1 robot."""
-  MPC_BODY_MASS = 108 / 9.8
-  MPC_BODY_INERTIA = np.array((0.24, 0, 0, 0, 0.80, 0, 0, 0, 1.00))
-
-  MPC_BODY_HEIGHT = 0.24
-  ACTION_CONFIG = [
-      locomotion_gym_config.ScalarField(name="FR_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="FR_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="FR_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="FL_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="FL_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="FL_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="RR_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="RR_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="RR_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-      locomotion_gym_config.ScalarField(name="RL_hip_motor",
-                                        upper_bound=0.802851455917,
-                                        lower_bound=-0.802851455917),
-      locomotion_gym_config.ScalarField(name="RL_upper_joint",
-                                        upper_bound=4.18879020479,
-                                        lower_bound=-1.0471975512),
-      locomotion_gym_config.ScalarField(name="RL_lower_joint",
-                                        upper_bound=-0.916297857297,
-                                        lower_bound=-2.69653369433),
-  ]
-  # Strictly enforce joint limits on the real robot, for safety.
-  JOINT_EPSILON = 0.0
 
   def __init__(self,
                pybullet_client,
@@ -224,7 +124,7 @@ class A1Robot(a1.A1):
   def _CheckMotorTemperatures(self):
     if any(self._motor_temperatures > MOTOR_WARN_TEMP_C):
       print("WARNING: Motors are getting hot. Temperatures:")
-      for name, temp in zip(MOTOR_NAMES, self._motor_temperatures.astype(int)):
+      for name, temp in zip(a1.MOTOR_NAMES, self._motor_temperatures.astype(int)):
         print(f"{name}: {temp} C")
 
   def _UpdatePosition(self):
@@ -299,12 +199,12 @@ class A1Robot(a1.A1):
 
     command = np.zeros(60, dtype=np.float32)
     if motor_control_mode == robot_config.MotorControlMode.POSITION:
-      for motor_id in range(NUM_MOTORS):
+      for motor_id in range(a1.NUM_MOTORS):
         command[motor_id * 5] = motor_commands[motor_id]
-        command[motor_id * 5 + 1] = MOTOR_KPS[motor_id]
-        command[motor_id * 5 + 3] = MOTOR_KDS[motor_id]
+        command[motor_id * 5 + 1] = a1.MOTOR_KPS[motor_id]
+        command[motor_id * 5 + 3] = a1.MOTOR_KDS[motor_id]
     elif motor_control_mode == robot_config.MotorControlMode.TORQUE:
-      for motor_id in range(NUM_MOTORS):
+      for motor_id in range(a1.NUM_MOTORS):
         command[motor_id * 5 + 4] = motor_commands[motor_id]
     elif motor_control_mode == robot_config.MotorControlMode.HYBRID:
       command = np.array(motor_commands, dtype=np.float32)

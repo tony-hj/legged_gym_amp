@@ -27,9 +27,6 @@ class ActionScaleWrapper(gym.Env):
       The tuple containing the flattened observation, the reward, the epsiode
         end indicator.
     """
-    fl, fr, rl, rr = np.split(action, 4, axis=0)
-    action = np.hstack([fr, fl, rr, rl])
-
     new_action = action * self.action_scale + self.default_pose
     return self._gym_env.step(new_action)
 
