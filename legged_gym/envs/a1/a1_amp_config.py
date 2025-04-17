@@ -31,7 +31,7 @@ import glob
 
 from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobotCfgPPO
 
-MOTION_FILES = glob.glob('datasets/mocap_motions_a1/*')
+MOTION_FILES = glob.glob('/home/ss/legged_gym_amp/datasets/mocap_motions_a1/*')
 
 
 class A1AMPCfg( LeggedRobotCfg ):
@@ -159,7 +159,7 @@ class A1AMPCfgPPO( LeggedRobotCfgPPO ):
         experiment_name = 'a1_amp_example'
         algorithm_class_name = 'AMPPPO'
         policy_class_name = 'ActorCritic'
-        max_iterations = 500000 # number of policy updates
+        max_iterations = 200 # number of policy updates
 
         amp_reward_coef = 2.0
         amp_motion_files = MOTION_FILES
