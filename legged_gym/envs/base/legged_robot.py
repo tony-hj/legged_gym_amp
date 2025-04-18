@@ -278,13 +278,13 @@ class LeggedRobot(BaseTask):
             else:
              lin_vel_x *= torch.abs(torch.tensor(self.command_ranges["lin_vel_x"][0]))
 
-            lin_vel_y = -1 * self._p1.get_axis(3)
+            lin_vel_y = -1 * self._p1.get_axis(0)
             if lin_vel_y >= 0:
              lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][1]))
             else:
              lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][0]))
 
-            ang_vel = -1 * self._p1.get_axis(0)
+            ang_vel = -1 * self._p1.get_axis(3)
             if ang_vel >= 0:
              ang_vel *= torch.abs(torch.tensor(self.command_ranges["ang_vel_yaw"][1]))
             else:
@@ -447,7 +447,16 @@ class LeggedRobot(BaseTask):
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
-        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+
+        low, high = self.command_ranges["lin_vel_x"]
+        prob_backwards = 0.7  # 后退的概率（随机值更多会随机到后退指令）
+
+        is_negative = torch.rand(len(env_ids), 1, device=self.device) < prob_backwards
+        neg_samples = torch_rand_float(low, 0.0, (len(env_ids), 1), device=self.device)
+        pos_samples = torch_rand_float(0.0, high, (len(env_ids), 1), device=self.device)
+        lin_vel_x_samples = torch.where(is_negative, neg_samples, pos_samples).squeeze(1)
+        self.commands[env_ids, 0] = lin_vel_x_samples
+        # self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         if self.cfg.commands.heading_command:
             self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
@@ -455,7 +464,7 @@ class LeggedRobot(BaseTask):
             self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
 
         # set small commands to zero
-        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+        self.commands[env_ids, :2] *= (torch.norm(self.commands[env_ids, :2], dim=1) >= 0.12).unsqueeze(1)
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -1057,7 +1066,7 @@ class LeggedRobot(BaseTask):
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
         self.feet_air_time += self.dt
-        rew_airTime = torch.sum((self.feet_air_time - 0.5) * first_contact, dim=1) # reward only on first contact with the ground
+        rew_airTime = torch.sum((self.feet_air_time - 0.35) * first_contact, dim=1) # reward only on first contact with the ground
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
         self.feet_air_time *= ~contact_filt
         return rew_airTime
