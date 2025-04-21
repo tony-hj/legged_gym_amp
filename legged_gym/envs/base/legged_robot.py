@@ -111,14 +111,14 @@ class LeggedRobot(BaseTask):
 
     def step(self, actions):
         """ Apply actions, simulate, call self.post_physics_step()
-
+        actions: 是有Actor_critic网络的Actor网络生成的一组(num_envs,12)的动作组
         Args:
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
         # step physics and render each frame
-        self.render()
+        self.render() # 图形界面渲染, 使用--headless会跳过该函数
         for _ in range(self.cfg.control.decimation):
             self.torques = self._compute_torques(self.actions).view(self.torques.shape)
             self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self.torques))
@@ -451,12 +451,12 @@ class LeggedRobot(BaseTask):
         low, high = self.command_ranges["lin_vel_x"]
         prob_backwards = 0.7  # 后退的概率（随机值更多会随机到后退指令）
 
-        is_negative = torch.rand(len(env_ids), 1, device=self.device) < prob_backwards
-        neg_samples = torch_rand_float(low, 0.0, (len(env_ids), 1), device=self.device)
-        pos_samples = torch_rand_float(0.0, high, (len(env_ids), 1), device=self.device)
-        lin_vel_x_samples = torch.where(is_negative, neg_samples, pos_samples).squeeze(1)
-        self.commands[env_ids, 0] = lin_vel_x_samples
-        # self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
+        # is_negative = torch.rand(len(env_ids), 1, device=self.device) < prob_backwards
+        # neg_samples = torch_rand_float(low, 0.0, (len(env_ids), 1), device=self.device)
+        # pos_samples = torch_rand_float(0.0, high, (len(env_ids), 1), device=self.device)
+        # lin_vel_x_samples = torch.where(is_negative, neg_samples, pos_samples).squeeze(1)
+        # self.commands[env_ids, 0] = lin_vel_x_samples
+        self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         self.commands[env_ids, 1] = torch_rand_float(self.command_ranges["lin_vel_y"][0], self.command_ranges["lin_vel_y"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         if self.cfg.commands.heading_command:
             self.commands[env_ids, 3] = torch_rand_float(self.command_ranges["heading"][0], self.command_ranges["heading"][1], (len(env_ids), 1), device=self.device).squeeze(1)
@@ -707,6 +707,7 @@ class LeggedRobot(BaseTask):
             self.randomized_p_gains, self.randomized_d_gains = self.compute_randomized_gains(self.num_envs)
 
     def compute_randomized_gains(self, num_envs):
+        ## 随机刚度和阻尼随机因子，增加策略鲁棒性
         p_mult = ((
             self.cfg.domain_rand.stiffness_multiplier_range[0] -
             self.cfg.domain_rand.stiffness_multiplier_range[1]) *

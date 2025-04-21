@@ -120,28 +120,29 @@ class Go1AMPCfg( LeggedRobotCfg ):
             termination = 0.0
             tracking_lin_vel = 1.5 * 1. / (.005 * 6)
             tracking_ang_vel = 0.5 * 1. / (.005 * 6)
-            lin_vel_z = 0.0
-            ang_vel_xy = 0.0
+            lin_vel_z = 0
+            ang_vel_xy = 0
             orientation = 0.0
-            torques = 0.0
+            torques = 0
             dof_vel = 0.0
-            dof_acc = -2.5e-6
+            dof_acc = -6.0e-7
+            dof_acc = 0
             base_height = 0.0
-            feet_air_time =  0.0
-            collision = 0.0
+            feet_air_time =  0
+            collision = 0
             feet_stumble = 0.0
-            action_rate = 0.0
-            stand_still = 0.0
+            action_rate = 0
+            stand_still = 0
             dof_pos_limits = 0.0
 
     class commands:
-        curriculum = False
+        curriculum = True
         max_curriculum = 1.
         num_commands = 4 # default: lin_vel_x, lin_vel_y, ang_vel_yaw, heading (in heading mode ang_vel_yaw is recomputed from heading error)
         resampling_time = 10. # time before command are changed[s]
         heading_command = False # if true: compute ang vel command from heading error
         class ranges:
-            lin_vel_x = [-1.0, 1] # min max [m/s]
+            lin_vel_x = [-1.3, 1.3] # min max [m/s]
             lin_vel_y = [-0.3, 0.3]   # min max [m/s]
             ang_vel_yaw = [-1.50, 1.50]    # min max [rad/s]
             heading = [-3.14, 3.14]
@@ -155,17 +156,17 @@ class Go1AMPCfgPPO( LeggedRobotCfgPPO ):
         num_mini_batches = 4
 
     class runner( LeggedRobotCfgPPO.runner ):
-        run_name = ''
-        save_interval = 100
+        run_name = 'plane'
+        save_interval = 200
         experiment_name = 'go1'
         algorithm_class_name = 'AMPPPO'
         policy_class_name = 'ActorCritic'
-        max_iterations = 3000 # number of policy updates
+        max_iterations = 30000 # number of policy updates
 
-        amp_reward_coef = 2.0
+        amp_reward_coef = 2
         amp_motion_files = MOTION_FILES
         amp_num_preload_transitions = 2000000
-        amp_task_reward_lerp = 0.5
+        amp_task_reward_lerp = 0.3
         amp_discr_hidden_dims = [1024, 512]
 
         min_normalized_std = [0.01, 0.01, 0.01] * 4

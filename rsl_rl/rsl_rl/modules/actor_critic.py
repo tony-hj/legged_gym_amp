@@ -50,10 +50,10 @@ class ActorCritic(nn.Module):
             print("ActorCritic.__init__ got unexpected arguments, which will be ignored: " + str([key for key in kwargs.keys()]))
         super(ActorCritic, self).__init__()
 
-        activation = get_activation(activation)
+        activation = get_activation(activation) # 激活函数
 
         mlp_input_dim_a = num_actor_obs
-        mlp_input_dim_c = num_critic_obs
+        mlp_input_dim_c = num_critic_obs    # 评论家相较于演员多了特征
 
         # Policy
         actor_layers = []
@@ -120,13 +120,13 @@ class ActorCritic(nn.Module):
         return self.distribution.entropy().sum(dim=-1)
 
     def update_distribution(self, observations):
-        mean = self.actor(observations)
-        std = self.std.to(mean.device)
-        self.distribution = Normal(mean, mean*0. + std)
+        mean = self.actor(observations) ## 策略网络，根据当前观测值输出动作分布的均值
+        std = self.std.to(mean.device) ## 固定标准差
+        self.distribution = Normal(mean, mean*0. + std) ## 构造动作分布
 
     def act(self, observations, **kwargs):
         self.update_distribution(observations)
-        return self.distribution.sample()
+        return self.distribution.sample() ## 从策略定义的分布中采样动作
     
     def get_actions_log_prob(self, actions):
         return self.distribution.log_prob(actions).sum(dim=-1)

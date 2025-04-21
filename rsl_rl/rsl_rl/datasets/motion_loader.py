@@ -83,8 +83,8 @@ class AMPLoader:
                 # Normalize and standardize quaternions.
                 for f_i in range(motion_data.shape[0]):
                     root_rot = AMPLoader.get_root_rot(motion_data[f_i])
-                    root_rot = pose3d.QuaternionNormalize(root_rot)
-                    root_rot = motion_util.standardize_quaternion(root_rot)
+                    root_rot = pose3d.QuaternionNormalize(root_rot) # 四元数归一化(四元数只有归一化才能表示方向)
+                    root_rot = motion_util.standardize_quaternion(root_rot) # 四元数标准化，四元数q(x,y,z,w)和-q(-x,-y,-z,-w)表示完全相同的旋转,物理上等价，但训练时网络认为不一样，导致loss波动
                     motion_data[
                         f_i,
                         AMPLoader.POS_SIZE:
@@ -251,7 +251,7 @@ class AMPLoader:
         blend = torch.tensor(p * n - idx_low, device=self.device, dtype=torch.float32).unsqueeze(-1)
 
         pos_blend = self.slerp(all_frame_pos_starts, all_frame_pos_ends, blend)
-        rot_blend = utils.quaternion_slerp(all_frame_rot_starts, all_frame_rot_ends, blend)
+        rot_blend = utils.quaternion_slerp(all_frame_rot_starts, all_frame_rot_ends, blend) # 四元数球面线性插值，在两个旋转之间插值
         amp_blend = self.slerp(all_frame_amp_starts, all_frame_amp_ends, blend)
         return torch.cat([pos_blend, rot_blend, amp_blend], dim=-1)
 

@@ -116,10 +116,10 @@ class AMPPPO:
         if self.actor_critic.is_recurrent:
             self.transition.hidden_states = self.actor_critic.get_hidden_states()
         # Compute the actions and values
-        aug_obs, aug_critic_obs = obs.detach(), critic_obs.detach()
-        self.transition.actions = self.actor_critic.act(aug_obs).detach()
-        self.transition.values = self.actor_critic.evaluate(aug_critic_obs).detach()
-        self.transition.actions_log_prob = self.actor_critic.get_actions_log_prob(self.transition.actions).detach()
+        aug_obs, aug_critic_obs = obs.detach(), critic_obs.detach() # detach() 会阻断autograd链条，表示这些观测只是用来获取当前动作，不参与反向传播
+        self.transition.actions = self.actor_critic.act(aug_obs).detach() # 通过当前观测值obs通过策略网络计算出智能体的行为 12个关节
+        self.transition.values = self.actor_critic.evaluate(aug_critic_obs).detach() # critic网络评估该状态的价值 1个值
+        self.transition.actions_log_prob = self.actor_critic.get_actions_log_prob(self.transition.actions).detach() # 对每个状态对应的动作价值用log函数
         self.transition.action_mean = self.actor_critic.action_mean.detach()
         self.transition.action_sigma = self.actor_critic.action_std.detach()
         # need to record obs and critic_obs before env.step()
@@ -157,16 +157,16 @@ class AMPPPO:
         mean_grad_pen_loss = 0
         mean_policy_pred = 0
         mean_expert_pred = 0
-        if self.actor_critic.is_recurrent:
+        if self.actor_critic.is_recurrent: ## 根据网络策略网络是否是循环结构来选择不同的数据生成方式
             generator = self.storage.reccurent_mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
         else:
             generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
 
-        amp_policy_generator = self.amp_storage.feed_forward_generator(
+        amp_policy_generator = self.amp_storage.feed_forward_generator( ## 通过策略采样得到的动作状态序列
             self.num_learning_epochs * self.num_mini_batches,
             self.storage.num_envs * self.storage.num_transitions_per_env //
                 self.num_mini_batches)
-        amp_expert_generator = self.amp_data.feed_forward_generator(
+        amp_expert_generator = self.amp_data.feed_forward_generator( ## 来自专家演示的数据
             self.num_learning_epochs * self.num_mini_batches,
             self.storage.num_envs * self.storage.num_transitions_per_env //
                 self.num_mini_batches)
@@ -183,7 +183,7 @@ class AMPPPO:
                 sigma_batch = self.actor_critic.action_std
                 entropy_batch = self.actor_critic.entropy
 
-                # KL
+                # KL 动态调整学习率，如果 KL 过大说明策略变动太猛，会降低学习率；太小则可能提升学习率。
                 if self.desired_kl != None and self.schedule == 'adaptive':
                     with torch.inference_mode():
                         kl = torch.sum(
@@ -199,7 +199,7 @@ class AMPPPO:
                             param_group['lr'] = self.learning_rate
 
 
-                # Surrogate loss
+                # Surrogate loss 鼓励高优势动作概率上升，限制策略更新的步幅以确保训练稳定性
                 ratio = torch.exp(actions_log_prob_batch - torch.squeeze(old_actions_log_prob_batch))
                 surrogate = -torch.squeeze(advantages_batch) * ratio
                 surrogate_clipped = -torch.squeeze(advantages_batch) * torch.clamp(ratio, 1.0 - self.clip_param,

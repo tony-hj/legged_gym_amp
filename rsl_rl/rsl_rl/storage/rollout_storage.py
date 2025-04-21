@@ -129,13 +129,13 @@ class RolloutStorage:
             else:
                 next_values = self.values[step + 1]
             next_is_not_terminal = 1.0 - self.dones[step].float()
-            delta = self.rewards[step] + next_is_not_terminal * gamma * next_values - self.values[step]
-            advantage = delta + next_is_not_terminal * gamma * lam * advantage
-            self.returns[step] = advantage + self.values[step]
+            delta = self.rewards[step] + next_is_not_terminal * gamma * next_values - self.values[step] # 标准TD残差delta_t
+            advantage = delta + next_is_not_terminal * gamma * lam * advantage ## 优势函数的GAE形式: A_t
+            self.returns[step] = advantage + self.values[step] ## 回报： R_t = A_t + V(S_t)
 
         # Compute and normalize the advantages
-        self.advantages = self.returns - self.values
-        self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
+        self.advantages = self.returns - self.values ## A_t = R_t - V(S_t)
+        self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8) ## 标准化,使其均值为0标准差为1
 
     def get_statistics(self):
         done = self.dones
@@ -146,9 +146,9 @@ class RolloutStorage:
         return trajectory_lengths.float().mean(), self.rewards.mean()
 
     def mini_batch_generator(self, num_mini_batches, num_epochs=8):
-        batch_size = self.num_envs * self.num_transitions_per_env
+        batch_size = self.num_envs * self.num_transitions_per_env ## 4096*24
         mini_batch_size = batch_size // num_mini_batches
-        indices = torch.randperm(num_mini_batches*mini_batch_size, requires_grad=False, device=self.device)
+        indices = torch.randperm(num_mini_batches*mini_batch_size, requires_grad=False, device=self.device) ## 随机打乱的数据索引，用于打乱样本顺序（防止网络记住顺序）
 
         observations = self.observations.flatten(0, 1)
         if self.privileged_observations is not None:
@@ -156,7 +156,7 @@ class RolloutStorage:
         else:
             critic_observations = observations
 
-        actions = self.actions.flatten(0, 1)
+        actions = self.actions.flatten(0, 1) ## .flatten(0, 1)将张量的第0维和第1维合并成一个维度 例如（4，5，10）——> （20，10）
         values = self.values.flatten(0, 1)
         returns = self.returns.flatten(0, 1)
         old_actions_log_prob = self.actions_log_prob.flatten(0, 1)
