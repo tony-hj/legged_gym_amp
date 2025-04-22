@@ -82,8 +82,8 @@ class LeggedRobot(BaseTask):
                             LEGGED_GYM_ROOT_DIR=LEGGED_GYM_ROOT_DIR)).read(),
                                 ee_name).to(device=sim_device))
 
-        self._get_commands_from_joystick = self.cfg.env.get_commands_from_joystick
-        # self._get_commands_from_joystick = False
+        # self._get_commands_from_joystick = self.cfg.env.get_commands_from_joystick
+        self._get_commands_from_joystick = False
         if self._get_commands_from_joystick:
           pygame.init()
           self._p1 = pygame.joystick.Joystick(0)
@@ -309,13 +309,15 @@ class LeggedRobot(BaseTask):
 
         # add noise if needed
         if self.add_noise:
+            self.noise_scale_vec = self._get_noise_scale_vec(self.cfg)
             self.privileged_obs_buf += (2 * torch.rand_like(self.privileged_obs_buf) - 1) * self.noise_scale_vec
 
         # Remove velocity observations from policy observation.
-        if self.num_obs == self.num_privileged_obs - 6:
-            self.obs_buf = self.privileged_obs_buf[:, 6:]
-        else:
-            self.obs_buf = torch.clone(self.privileged_obs_buf)
+        self.obs_buf = self.privileged_obs_buf[:, 6:48]
+        # if self.num_obs == self.num_privileged_obs - 6:
+        #     self.obs_buf = self.privileged_obs_buf[:, 6:]
+        # else:
+        #     self.obs_buf = torch.clone(self.privileged_obs_buf)
 
     def get_amp_observations(self):
         joint_pos = self.dof_pos
@@ -1067,7 +1069,7 @@ class LeggedRobot(BaseTask):
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
         self.feet_air_time += self.dt
-        rew_airTime = torch.sum((self.feet_air_time - 0.35) * first_contact, dim=1) # reward only on first contact with the ground
+        rew_airTime = torch.sum(torch.minimum((self.feet_air_time - 0.3) * first_contact,torch.zeros_like(self.feet_air_time)), dim=1) # reward only on first contact with the ground
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
         self.feet_air_time *= ~contact_filt
         return rew_airTime

@@ -57,8 +57,10 @@ class AMPOnPolicyRunner:
         self.policy_cfg = train_cfg["policy"]
         self.device = device
         self.env = env
-        if self.env.num_privileged_obs is not None:
-            num_critic_obs = self.env.num_privileged_obs 
+        if hasattr(self.env, 'num_height_points') and self.env.num_height_points is not None:
+            num_critic_obs = self.env.num_privileged_obs + self.env.num_height_points
+        elif self.env.num_privileged_obs is not None:
+            num_critic_obs = self.env.num_privileged_obs
         else:
             num_critic_obs = self.env.num_obs
         actor_critic_class = eval(self.cfg["policy_class_name"]) # ActorCritic
@@ -92,7 +94,7 @@ class AMPOnPolicyRunner:
         self.save_interval = self.cfg["save_interval"]
 
         # init storage and model
-        self.alg.init_storage(self.env.num_envs, self.num_steps_per_env, [num_actor_obs], [self.env.num_privileged_obs], [self.env.num_actions])
+        self.alg.init_storage(self.env.num_envs, self.num_steps_per_env, [num_actor_obs], [num_critic_obs], [self.env.num_actions])
 
         # Log
         self.log_dir = log_dir
