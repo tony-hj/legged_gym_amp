@@ -34,7 +34,7 @@ from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobot
 MOTION_FILES = glob.glob('/home/ss/legged_gym_amp/datasets/mocap_motions_go1/*')
 
 
-class Go1AMPCfg( LeggedRobotCfg ):
+class Go1AMPTCfg( LeggedRobotCfg ):
 
     class env( LeggedRobotCfg.env ):
         num_envs = 4096
@@ -48,7 +48,8 @@ class Go1AMPCfg( LeggedRobotCfg ):
         get_commands_from_joystick = False
 
     class init_state( LeggedRobotCfg.init_state ):
-        pos = [0.0, 0.0, 0.42] # x,y,z [m]
+        pos = [0.0, 0.0, 0.92] # x,y,z [m]
+        # pos = [0.0, 0.0, 0.42] # x,y,z [m]
         default_joint_angles = { # = target angles [rad] when action = 0.0
             'leg0_FL_a_hip_joint': -0.15,   # [rad]
             'leg0_FL_c_thigh_joint': 0.55,     # [rad]
@@ -75,19 +76,39 @@ class Go1AMPCfg( LeggedRobotCfg ):
         # action scale: target angle = actionScale * action + defaultAngle
         action_scale = 0.25
         # decimation: Number of control action updates @ sim DT per policy DT
-        decimation = 4
+        decimation = 6
 
     class terrain( LeggedRobotCfg.terrain ):
-        mesh_type = 'plane'
-        measure_heights = False
+        mesh_type = 'trimesh' # "heightfield" # none, plane, heightfield or trimesh
+        horizontal_scale = 0.1 # [m]
+        vertical_scale = 0.005 # [m]
+        border_size = 25 # [m]
+        curriculum = True
+        static_friction = 1.0
+        dynamic_friction = 1.0
+        restitution = 0.
+        # rough terrain only:
+        measure_heights = True
+        measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] # 1mx1.6m rectangle (without center line)
+        measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+        selected = False # select a unique terrain type and pass all arguments
+        terrain_kwargs = None # Dict of arguments for selected terrain
+        max_init_terrain_level = 5 # starting curriculum state
+        terrain_length = 8.
+        terrain_width = 8.
+        num_rows= 10 # number of terrain rows (levels)
+        num_cols = 20 # number of terrain cols (types)
+        # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
+        terrain_proportions = [0.1, 0.1, 0.35, 0.25, 0.2]
+        # trimesh only:
+        slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
 
     class asset( LeggedRobotCfg.asset ):
         file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/go1/urdf/go1.urdf'
         foot_name = "foot"
         penalize_contacts_on = ["thigh", "calf"]
         terminate_after_contacts_on = [
-            "base", "FL_calf", "FR_calf", "RL_calf", "RR_calf",
-            "FL_thigh", "FR_thigh", "RL_thigh", "RR_thigh"]
+            "base"]
         self_collisions = 0 # 1 to disable, 0 to enable...bitwise filter
 
     class domain_rand:
@@ -120,18 +141,17 @@ class Go1AMPCfg( LeggedRobotCfg ):
             termination = 0.0
             tracking_lin_vel = 1.5 * 1. / (.005 * 6)
             tracking_ang_vel = 0.5 * 1. / (.005 * 6)
-            lin_vel_z = -0.3
+            lin_vel_z = 0
             ang_vel_xy = 0
             orientation = 0.0
             torques = -0.00001
             dof_vel = 0.0
-            # dof_acc = -2.0e-6 ## 第一轮
-            dof_acc = -6.0e-6 ## 第二轮
+            dof_acc = -2.0e-6
             base_height = 0.0
             feet_air_time = 0.5
-            collision = -0.1
+            collision = 0
             feet_stumble = 0.0
-            action_rate = -0.01
+            action_rate = 0
             stand_still = 0
             dof_pos_limits = 0.0
 
@@ -142,12 +162,12 @@ class Go1AMPCfg( LeggedRobotCfg ):
         resampling_time = 10. # time before command are changed[s]
         heading_command = False # if true: compute ang vel command from heading error
         class ranges:
-            lin_vel_x = [-1.3, 1.3] # min max [m/s]
+            lin_vel_x = [-1, 1] # min max [m/s]
             lin_vel_y = [-0.3, 0.3]   # min max [m/s]
             ang_vel_yaw = [-1.50, 1.50]    # min max [rad/s]
             heading = [-3.14, 3.14]
 
-class Go1AMPCfgPPO( LeggedRobotCfgPPO ):
+class Go1AMPTCfgPPO( LeggedRobotCfgPPO ):
     runner_class_name = 'AMPOnPolicyRunner'
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
@@ -156,19 +176,17 @@ class Go1AMPCfgPPO( LeggedRobotCfgPPO ):
         num_mini_batches = 4
 
     class runner( LeggedRobotCfgPPO.runner ):
-        run_name = 'plane_p2_4_1_task0.6_r1'
+        run_name = 'terrain_p3'
         save_interval = 200
-        experiment_name = 'go1'
+        experiment_name = 'go1_terrain'
         algorithm_class_name = 'AMPPPO'
         policy_class_name = 'ActorCritic'
-        max_iterations = 15000 # number of policy updates
+        max_iterations = 30000 # number of policy updates
 
-        # amp_reward_coef = 1.5  ## 第一轮
-        amp_reward_coef = 1.0  ## 第二轮
+        amp_reward_coef = 0.5
         amp_motion_files = MOTION_FILES
         amp_num_preload_transitions = 2000000
-        # amp_task_reward_lerp = 0.4  ## 第一轮
-        amp_task_reward_lerp = 0.6  ## 第二轮
+        amp_task_reward_lerp = 0.6
         amp_discr_hidden_dims = [1024, 512]
 
         min_normalized_std = [0.01, 0.01, 0.01] * 4
