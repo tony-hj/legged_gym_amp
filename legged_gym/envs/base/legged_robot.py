@@ -1062,15 +1062,15 @@ class LeggedRobot(BaseTask):
         return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_sigma)
 
     def _reward_feet_air_time(self):
-        # Reward long steps
-        # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
         contact = self.contact_forces[:, self.feet_indices, 2] > 1.
         contact_filt = torch.logical_or(contact, self.last_contacts)
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
         self.feet_air_time += self.dt
-        rew_airTime = torch.sum(torch.minimum((self.feet_air_time - 0.3) * first_contact,torch.zeros_like(self.feet_air_time)), dim=1) # reward only on first contact with the ground
-        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.1 #no reward for zero command
+        valid_air_time = (self.feet_air_time >= 0.25) & (self.feet_air_time <= 0.8)
+        valid_cycle = valid_air_time * first_contact
+        rew_airTime = torch.sum((self.feet_air_time - 0.25) * valid_cycle, dim=1)
+        rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.12
         self.feet_air_time *= ~contact_filt
         return rew_airTime
 

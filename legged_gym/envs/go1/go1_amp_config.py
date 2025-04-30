@@ -128,7 +128,7 @@ class Go1AMPCfg( LeggedRobotCfg ):
             # dof_acc = -2.0e-6 ## 第一轮
             dof_acc = -6.0e-6 ## 第二轮
             base_height = 0.0
-            feet_air_time = 0.5
+            feet_air_time = 1
             collision = -0.1
             feet_stumble = 0.0
             action_rate = -0.01
@@ -156,19 +156,19 @@ class Go1AMPCfgPPO( LeggedRobotCfgPPO ):
         num_mini_batches = 4
 
     class runner( LeggedRobotCfgPPO.runner ):
-        run_name = 'plane_p2_4_1_task0.6_r1'
-        save_interval = 200
+        run_name = 'plane_p2_5_task0.4'
+        save_interval = 500
         experiment_name = 'go1'
         algorithm_class_name = 'AMPPPO'
         policy_class_name = 'ActorCritic'
         max_iterations = 15000 # number of policy updates
 
-        # amp_reward_coef = 1.5  ## 第一轮
-        amp_reward_coef = 1.0  ## 第二轮
+        amp_reward_coef = 1.5  ## 第一轮
+        # amp_reward_coef = 1.0  ## 第二轮
         amp_motion_files = MOTION_FILES
         amp_num_preload_transitions = 2000000
-        # amp_task_reward_lerp = 0.4  ## 第一轮
-        amp_task_reward_lerp = 0.6  ## 第二轮
+        amp_task_reward_lerp = 0.4  ## 第一轮
+        # amp_task_reward_lerp = 0.6  ## 第二轮
         amp_discr_hidden_dims = [1024, 512]
 
         min_normalized_std = [0.01, 0.01, 0.01] * 4
