@@ -27,12 +27,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
-
+# from joystick import Joystick
 from legged_gym import LEGGED_GYM_ROOT_DIR, envs
 from time import time
 from warnings import WarningMessage
 import numpy as np
 import os
+import struct
+from .my_joystick_reader import JoystickReader
 
 from isaacgym.torch_utils import *
 from isaacgym import gymtorch, gymapi, gymutil
@@ -83,12 +85,16 @@ class LeggedRobot(BaseTask):
                                 ee_name).to(device=sim_device))
 
         # self._get_commands_from_joystick = self.cfg.env.get_commands_from_joystick
-        self._get_commands_from_joystick = False
+        # self._get_commands_from_joystick = False
+        # if self._get_commands_from_joystick:
+        #   pygame.init()
+        #   self._p1 = pygame.joystick.Joystick(0)
+        #   self._p1.init()
+        #   print(f"Loaded joystick with {self._p1.get_numaxes()} axes.")
+
+        self._get_commands_from_joystick = self.cfg.env.get_commands_from_joystick
         if self._get_commands_from_joystick:
-          pygame.init()
-          self._p1 = pygame.joystick.Joystick(0)
-          self._p1.init()
-          print(f"Loaded joystick with {self._p1.get_numaxes()} axes.")
+            self._p1 = JoystickReader()
 
         if not self.headless:
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
@@ -271,28 +277,34 @@ class LeggedRobot(BaseTask):
         """
 
         if self._get_commands_from_joystick:
-          for event in pygame.event.get():
-            lin_vel_x = -1 * self._p1.get_axis(1)
-            if lin_vel_x >= 0:
-             lin_vel_x *= torch.abs(torch.tensor(self.command_ranges["lin_vel_x"][1]))
-            else:
-             lin_vel_x *= torch.abs(torch.tensor(self.command_ranges["lin_vel_x"][0]))
-
-            lin_vel_y = -1 * self._p1.get_axis(0)
-            if lin_vel_y >= 0:
-             lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][1]))
-            else:
-             lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][0]))
-
-            ang_vel = -1 * self._p1.get_axis(3)
-            if ang_vel >= 0:
-             ang_vel *= torch.abs(torch.tensor(self.command_ranges["ang_vel_yaw"][1]))
-            else:
-             ang_vel *= torch.abs(torch.tensor(self.command_ranges["ang_vel_yaw"][0]))
-
+            self._p1.read_event()  # 读取并更新摇杆状态
+            lin_vel_x, lin_vel_y, ang_vel = self._p1.get_commands()
             self.commands[:, 0] = lin_vel_x
             self.commands[:, 1] = lin_vel_y
             self.commands[:, 2] = ang_vel
+          # for event in pygame.event.get():
+          #   lin_vel_x = -1 * self._p1.get_axis(1)
+          #   if lin_vel_x >= 0:
+          #    lin_vel_x *= torch.abs(torch.tensor(self.command_ranges["lin_vel_x"][1]))
+          #   else:
+          #    lin_vel_x *= torch.abs(torch.tensor(self.command_ranges["lin_vel_x"][0]))
+          #
+          #   lin_vel_y = -1 * self._p1.get_axis(0)
+          #   if lin_vel_y >= 0:
+          #    lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][1]))
+          #   else:
+          #    lin_vel_y *= torch.abs(torch.tensor(self.command_ranges["lin_vel_y"][0]))
+          #
+          #   ang_vel = -1 * self._p1.get_axis(3)
+          #   if ang_vel >= 0:
+          #    ang_vel *= torch.abs(torch.tensor(self.command_ranges["ang_vel_yaw"][1]))
+          #   else:
+          #    ang_vel *= torch.abs(torch.tensor(self.command_ranges["ang_vel_yaw"][0]))
+          #
+          #   self.commands[:, 0] = lin_vel_x
+          #   self.commands[:, 1] = lin_vel_y
+          #   self.commands[:, 2] = ang_vel
+
 
         self.privileged_obs_buf = torch.cat((  self.base_lin_vel * self.obs_scales.lin_vel,
                                     self.base_ang_vel  * self.obs_scales.ang_vel,
@@ -1067,7 +1079,7 @@ class LeggedRobot(BaseTask):
         self.last_contacts = contact
         first_contact = (self.feet_air_time > 0.) * contact_filt
         self.feet_air_time += self.dt
-        valid_air_time = (self.feet_air_time >= 0.25) & (self.feet_air_time <= 0.8)
+        valid_air_time = (self.feet_air_time >= 0.25) & (self.feet_air_time <= 0.7)
         valid_cycle = valid_air_time * first_contact
         rew_airTime = torch.sum((self.feet_air_time - 0.25) * valid_cycle, dim=1)
         rew_airTime *= torch.norm(self.commands[:, :2], dim=1) > 0.12
