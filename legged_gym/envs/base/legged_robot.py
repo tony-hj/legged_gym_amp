@@ -33,6 +33,7 @@ from time import time
 from warnings import WarningMessage
 import numpy as np
 import os
+import sys
 import struct
 from .my_joystick_reader import JoystickReader
 
@@ -186,6 +187,11 @@ class LeggedRobot(BaseTask):
         self.last_dof_vel[:] = self.dof_vel[:]
         self.last_root_vel[:] = self.root_states[:, 7:13]
 
+        for i in range(4):
+            self.base_feet_pose[:, i, :] = quat_rotate_inverse(self.base_quat, self.rigid_body_states[:, self.feet_indices, 0:3][:, i, :] - self.root_states[:, 0:3])
+        for i in range(4):
+            self.base_feet_vel[:, i, :] = quat_rotate_inverse(self.base_quat, self.rigid_body_states[:, self.feet_indices, 7:10][:, i, :] - self.root_states[:, 7:10]) ##有待推导
+        self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1).unsqueeze(1)
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
 
@@ -319,11 +325,14 @@ class LeggedRobot(BaseTask):
             heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.5 - self.measured_heights, -1, 1.) * self.obs_scales.height_measurements
             self.privileged_obs_buf = torch.cat((self.privileged_obs_buf, heights), dim=-1)
 
+
+        # obs_slice =  slice(3, 48) ## 给obs 增加了速度的观测值
+        # self.obs_buf = torch.clone(self.privileged_obs_buf[:, obs_slice])
         # add noise if needed
         if self.add_noise:
             self.noise_scale_vec = self._get_noise_scale_vec(self.cfg)
             self.privileged_obs_buf += (2 * torch.rand_like(self.privileged_obs_buf) - 1) * self.noise_scale_vec
-
+            # self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec[obs_slice]
         # Remove velocity observations from policy observation.
         self.obs_buf = self.privileged_obs_buf[:, 6:48]
         # if self.num_obs == self.num_privileged_obs - 6:
@@ -344,6 +353,7 @@ class LeggedRobot(BaseTask):
         base_ang_vel = self.base_ang_vel
         joint_vel = self.dof_vel
         z_pos = self.root_states[:, 2:3]
+        # sim_foot_pos = self.base_feet_pos.reshape(self.base_feet_pos.shape[0], 12)
         return torch.cat((joint_pos, foot_pos, base_lin_vel, base_ang_vel, joint_vel, z_pos), dim=-1)
 
     def create_sim(self):
@@ -661,6 +671,7 @@ class LeggedRobot(BaseTask):
         actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
+        rigid_body_state = self.gym.acquire_rigid_body_state_tensor(self.sim) ## 刚体状态 State for each rigid body contains position([0:3]), rotation([3:7]), linear velocity([7:10]), and angular velocity([10:13]).
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_actor_root_state_tensor(self.sim)
         self.gym.refresh_net_contact_force_tensor(self.sim)
@@ -668,6 +679,7 @@ class LeggedRobot(BaseTask):
         # create some wrapper tensors for different slices
         self.root_states = gymtorch.wrap_tensor(actor_root_state)
         self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)
+        self.rigid_body_states = gymtorch.wrap_tensor(rigid_body_state).view(self.num_envs, -1, 13)
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
         self.base_quat = self.root_states[:, 3:7]
@@ -688,7 +700,7 @@ class LeggedRobot(BaseTask):
         self.last_dof_vel = torch.zeros_like(self.dof_vel)
         self.last_root_vel = torch.zeros_like(self.root_states[:, 7:13])
         self.commands = torch.zeros(self.num_envs, self.cfg.commands.num_commands, dtype=torch.float, device=self.device, requires_grad=False) # x vel, y vel, yaw vel, heading
-        self.commands_scale = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel], device=self.device, requires_grad=False,) # TODO change this
+        self.commands_scale = torch.tensor([self.obs_scales.lin_vel, self.obs_scales.lin_vel, self.obs_scales.ang_vel], device=self.device, requires_grad=False,)
         self.feet_air_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
         self.last_contacts = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
         self.base_lin_vel = quat_rotate_inverse(self.base_quat, self.root_states[:, 7:10])
@@ -719,6 +731,10 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.domain_rand.randomize_gains:
             self.randomized_p_gains, self.randomized_d_gains = self.compute_randomized_gains(self.num_envs)
+
+        self.base_feet_pose = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self.device)
+        self.base_feet_vel = torch.zeros((self.num_envs, 4, 3), dtype=torch.float, device=self.device)
+        self.base_height = torch.zeros((self.num_envs, 1), dtype=torch.float, device=self.device)
 
     def compute_randomized_gains(self, num_envs):
         ## 随机刚度和阻尼随机因子，增加策略鲁棒性
@@ -966,7 +982,7 @@ class LeggedRobot(BaseTask):
         points = torch.zeros(self.num_envs, self.num_height_points, 3, device=self.device, requires_grad=False)
         points[:, :, 0] = grid_x.flatten()
         points[:, :, 1] = grid_y.flatten()
-        return points
+        return points #TODO 可以通过这个来获取初始化高度，初始化机器人的位置
 
     def _get_heights(self, env_ids=None):
         """ Samples heights of the terrain at required points around each robot.
